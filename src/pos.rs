@@ -1,6 +1,18 @@
 use std::ops::{Add, Mul};
+pub const LINES: [Pos; 4] = [Pos(0, 1), Pos(0, -1), Pos(1, 0), Pos(-1, 0)];
+pub const DIAGS: [Pos; 4] = [Pos(1, 1), Pos(1, -1), Pos(-1, 1), Pos(-1, -1)];
+pub const LOS: [Pos; 8] = [
+    Pos(0, 1),
+    Pos(0, -1),
+    Pos(1, 0),
+    Pos(-1, 0),
+    Pos(1, 1),
+    Pos(1, -1),
+    Pos(-1, 1),
+    Pos(-1, -1),
+];
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Pos(pub i32, pub i32);
 
 impl Add for Pos {

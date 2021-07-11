@@ -1,5 +1,5 @@
 use crate::board::Board;
-use crate::pos::Pos;
+use crate::pos::{Pos, DIAGS, LINES, LOS};
 use itertools::iproduct;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -8,18 +8,19 @@ pub enum Color {
     Black,
 }
 
-enum Action {
+pub enum Action {
     Go(Pos),
     Take(Pos),
     Promotion(Piece),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum PawnStatus {
     CanLeap,
     JustLeaped,
     CannotLeap,
 }
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Piece {
     Pawn {
         orientation: Pos,
@@ -115,25 +116,24 @@ fn knight_moves(board: &Board, pos: Pos, color: Color) -> Vec<Vec<Action>> {
         .collect()
 }
 
-fn bishop_moves(board: &Board, pos: Pos, color: Color) -> Vec<Vec<Action>> {
+fn los_moves(board: &Board, pos: Pos, color: Color, dirs: &[Pos]) -> Vec<Vec<Action>> {
     let mut res = Vec::new();
-    for (x, y) in iproduct!([-1, 1], [-1, 1]) {
-        let diag_dir = Pos(x, y);
-        let len = 1;
+    for dir in dirs {
+        let mut curr_pos = pos;
         loop {
-            let diag_pos = pos + diag_dir * len;
-            let diag = board.get(diag_pos);
-            if let Some(square) = diag {
+            curr_pos = curr_pos + *dir;
+            let line = board.get(curr_pos);
+            if let Some(square) = line {
                 if let Some((other_color, _)) = square {
                     // it's a square with a piece
                     if color != *other_color {
                         // it's a square with an opponent
-                        res.push(vec![Action::Go(diag_pos)]);
+                        res.push(vec![Action::Go(curr_pos)]);
                     }
                     break;
                 } else {
                     // it's a free square
-                    res.push(vec![Action::Go(diag_pos)]);
+                    res.push(vec![Action::Go(curr_pos)]);
                 }
             } else {
                 // it's out of the board
@@ -144,48 +144,23 @@ fn bishop_moves(board: &Board, pos: Pos, color: Color) -> Vec<Vec<Action>> {
     res
 }
 
+fn bishop_moves(board: &Board, pos: Pos, color: Color) -> Vec<Vec<Action>> {
+    los_moves(board, pos, color, &DIAGS)
+}
+
 fn rook_moves(board: &Board, pos: Pos, color: Color) -> Vec<Vec<Action>> {
-    let mut res = Vec::new();
-    for dir in [-1, 1] {
-        for line_dir in [Pos(0, dir), Pos(dir, 0)] {
-            let len = 1;
-            loop {
-                let line_pos = pos + line_dir * len;
-                let line = board.get(line_pos);
-                if let Some(square) = line {
-                    if let Some((other_color, _)) = square {
-                        // it's a square with a piece
-                        if color != *other_color {
-                            // it's a square with an opponent
-                            res.push(vec![Action::Go(line_pos)]);
-                        }
-                        break;
-                    } else {
-                        // it's a free square
-                        res.push(vec![Action::Go(line_pos)]);
-                    }
-                } else {
-                    // it's out of the board
-                    break;
-                }
-            }
-        }
-    }
-    res
+    los_moves(board, pos, color, &LINES)
 }
 
 fn queen_moves(board: &Board, pos: Pos, color: Color) -> Vec<Vec<Action>> {
-    let mut res = bishop_moves(board, pos, color);
-    res.extend(rook_moves(board, pos, color));
-    res
+    los_moves(board, pos, color, &LOS)
 }
 
 fn king_moves(board: &Board, pos: Pos, color: Color) -> Vec<Vec<Action>> {
     // NOTE: we don't do castling because in the game you place your pieces at the start of the match
     // so it's both useless and inapplicable in our case (also a HUGE pain to implement)
-    iproduct!(-1..=1, -1..=1)
-        .filter(|(x, y)| *x != 0 || *y != 0)
-        .map(|(x, y)| Pos(x, y) + pos)
+    LOS.iter()
+        .map(|los_dir| *los_dir + pos)
         .filter(|take_pos| {
             if let Some(square) = board.get(*take_pos) {
                 if let Some((other_color, _)) = square {
@@ -202,7 +177,7 @@ fn king_moves(board: &Board, pos: Pos, color: Color) -> Vec<Vec<Action>> {
 }
 
 impl Piece {
-    fn moves(self, board: &Board, pos: Pos, color: Color) -> Vec<Vec<Action>> {
+    pub fn moves(self, board: &Board, pos: Pos, color: Color) -> Vec<Vec<Action>> {
         match self {
             Piece::Pawn {
                 orientation,
@@ -213,7 +188,6 @@ impl Piece {
             Piece::Rook => rook_moves(board, pos, color),
             Piece::Queen => queen_moves(board, pos, color),
             Piece::King => king_moves(board, pos, color),
-            _ => Vec::new(),
         }
     }
 }
