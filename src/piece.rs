@@ -1,13 +1,14 @@
 use crate::board::Board;
 use crate::pos::{Pos, DIAGS, LINES, LOS};
 use itertools::iproduct;
+use std::fmt::Display;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Color {
     White,
     Black,
 }
-
+#[derive(Clone, Copy)]
 pub enum Action {
     Go(Pos),
     Take(Pos),
@@ -15,7 +16,7 @@ pub enum Action {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum PawnStatus {
+pub enum PawnStatus {
     CanLeap,
     JustLeaped,
     CannotLeap,
@@ -44,25 +45,20 @@ fn pawn_moves(
     // Non-Taking moves
     let forward_pos = orientation + pos;
     let leap_pos = orientation * 2 + pos;
-    let leap = board.get(leap_pos);
     // if there is a free cell forward
     if let Some(None) = board.get(forward_pos) {
         res.push(vec![Action::Go(forward_pos)]);
-        // if we reached the backrank
-        if leap.is_none() {
-            res.push(vec![Action::Promotion(Piece::Knight)]);
-            res.push(vec![Action::Promotion(Piece::Queen)]);
-        }
         // if we can leap
         if matches!(status, PawnStatus::CanLeap) {
             // and the square is available
-            if let Some(None) = leap {
+            if let Some(None) = board.get(leap_pos) {
                 res.push(vec![Action::Go(leap_pos)]);
             }
         }
     }
     // Taking moves
-    for diag_pos in orientation.neighbors() {
+    for diag_dir in orientation.neighbors() {
+        let diag_pos = diag_dir + pos;
         let diag = board.get(diag_pos);
         // if it's a square
         if let Some(square) = diag {
@@ -95,7 +91,27 @@ fn pawn_moves(
             }
         }
     }
-    res
+    // Handle promotions
+    let mut res_prom: Vec<Vec<Action>> = Vec::new();
+    for actions in res.iter() {
+        let mut last_pos = pos;
+        for action in actions {
+            if let Action::Go(go_pos) = action {
+                last_pos = *go_pos;
+            }
+        }
+        if board.get(last_pos + orientation).is_none() {
+            let mut action_q = actions.clone();
+            action_q.push(Action::Promotion(Piece::Queen));
+            let mut action_n = actions.clone();
+            action_n.push(Action::Promotion(Piece::Knight));
+            res_prom.push(action_q);
+            res_prom.push(action_n);
+        } else {
+            res_prom.push(actions.clone())
+        }
+    }
+    res_prom
 }
 
 fn knight_moves(board: &Board, pos: Pos, color: Color) -> Vec<Vec<Action>> {
@@ -177,6 +193,47 @@ fn king_moves(board: &Board, pos: Pos, color: Color) -> Vec<Vec<Action>> {
 }
 
 impl Piece {
+    pub fn begin_turn(self) -> Self {
+        match self {
+            Piece::Pawn {
+                orientation,
+                status,
+            } => {
+                let mut newstatus = status;
+                if status == PawnStatus::JustLeaped {
+                    newstatus = PawnStatus::CannotLeap;
+                }
+                Piece::Pawn {
+                    orientation,
+                    status: newstatus,
+                }
+            }
+            _ => self,
+        }
+    }
+
+    pub fn moved(self, start: Pos, target: Pos) -> Self {
+        match self {
+            Piece::Pawn {
+                orientation,
+                status: _,
+            } => {
+                if start + orientation * 2 == target {
+                    Piece::Pawn {
+                        orientation,
+                        status: PawnStatus::JustLeaped,
+                    }
+                } else {
+                    Piece::Pawn {
+                        orientation,
+                        status: PawnStatus::CannotLeap,
+                    }
+                }
+            }
+            _ => self,
+        }
+    }
+
     pub fn moves(self, board: &Board, pos: Pos, color: Color) -> Vec<Vec<Action>> {
         match self {
             Piece::Pawn {

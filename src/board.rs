@@ -1,16 +1,26 @@
 use crate::piece::{Action, Color, Piece};
-use crate::pos::{Pos, LOS};
+use crate::pos::Pos;
 use std::collections::HashMap;
+use std::fmt::Display;
 
 type Square = Option<(Color, Piece)>;
 
+#[derive(Clone)]
 pub struct Board {
     width: usize,
     height: usize,
-    squares: Vec<Square>,
+    pub squares: Vec<Square>,
 }
 
 impl Board {
+    pub fn new(width: usize, height: usize) -> Self {
+        Self {
+            width,
+            height,
+            squares: vec![None; width * height],
+        }
+    }
+
     fn in_bound(&self, pos: Pos) -> bool {
         0 <= pos.0 && pos.0 < self.width as i32 && 0 <= pos.1 && pos.1 < self.height as i32
     }
@@ -19,37 +29,164 @@ impl Board {
         if !self.in_bound(pos) {
             return None;
         }
-        Some(&self.squares[(pos.0 + pos.1 * self.width as i32) as usize])
+        Some(&self.squares[self.i(pos)])
     }
 
-    pub fn moves(&self, color: Color) -> HashMap<Pos, Vec<Vec<Action>>> {
-        // generate all moves for color
-        let mut res = HashMap::new();
-        let mut king_pos = None;
+    pub fn set(&mut self, pos: Pos, square: Square) {
+        let i = self.i(pos);
+        self.squares[i] = square;
+    }
+
+    pub fn pos(&self, i: usize) -> Pos {
+        Pos((i % self.width) as i32, (i / self.height) as i32)
+    }
+
+    pub fn i(&self, pos: Pos) -> usize {
+        (pos.0 + pos.1 * self.width as i32) as usize
+    }
+
+    fn king_pos(&self, color: Color) -> Option<Pos> {
         for (i, square) in self.squares.iter().enumerate() {
             if let Some((piece_color, piece)) = square {
-                if *piece_color == color {
-                    let pos = Pos((i % self.width) as i32, (i / self.height) as i32);
-                    res.insert(pos, piece.moves(self, pos, color));
-                    if *piece == Piece::King {
-                        king_pos = Some(pos);
+                if *piece_color == color && *piece == Piece::King {
+                    return Some(self.pos(i));
+                }
+            }
+        }
+        None
+    }
+
+    fn is_checked(&self, color: Color) -> bool {
+        // if this panic then there's no king of this color on the board lol
+        let king_pos = self.king_pos(color).unwrap();
+        let o_color = match color {
+            Color::White => Color::Black,
+            Color::Black => Color::White,
+        };
+        for (_, moves) in self.moves(o_color, false) {
+            for actions in moves {
+                for action in actions {
+                    if let Action::Go(go_pos) = action {
+                        if go_pos == king_pos {
+                            return true;
+                        }
+                    } else if let Action::Take(take_pos) = action {
+                        if take_pos == king_pos {
+                            return true;
+                        }
                     }
                 }
             }
         }
-        // if this panics it means there's no king with this color on the board lol
-        let king_pos = king_pos.unwrap();
-        // scan all los from the king's pos to see which pieces are potentially blocking an attack on the king
-        // ENNEMY PIECES COUNT TOO -> cause in en passant case you can take a piece without replacing it with your own on the same square
-        // After that, generate board from moves involving these position
-        //  for each of these boards, check the concerned los again and if there's an opponent that can take the king on it, cancel the move
+        false
+    }
 
-        // additionnaly, check all the king moves and make sure the opponent has no Go or Take move on this position
-        // (this time we can't use los tricks cause we have to watch out for knights)
+    pub fn moves(&self, color: Color, safe_moves: bool) -> HashMap<Pos, Vec<Vec<Action>>> {
+        // generate all moves for color
+        let mut res = HashMap::new();
+        for (i, square) in self.squares.iter().enumerate() {
+            if let Some((piece_color, piece)) = square {
+                if *piece_color == color {
+                    let pos = self.pos(i);
+                    let mut p_moves = piece.moves(self, pos, color);
+                    if safe_moves {
+                        p_moves = p_moves
+                            .into_iter()
+                            .filter(|actions| {
+                                let board = self.play(color, pos, actions);
+                                !board.is_checked(color)
+                            })
+                            .collect();
+                    }
+                    if p_moves.len() > 0 {
+                        res.insert(pos, p_moves);
+                    }
+                }
+            }
+        }
         res
     }
 
-    pub fn play(&self, color: Color, pos: Pos, actions: Vec<Action>) {
-        // TODO: resolve the move into a new board, send the appropriate event to update pieces data
+    fn begin_turn(&mut self, color: Color) {
+        for i in 0..self.squares.len() {
+            if let Some((p_color, piece)) = self.squares[i] {
+                if p_color == color {
+                    self.squares[i] = Some((p_color, piece.begin_turn()))
+                }
+            }
+        }
+    }
+
+    fn moved(&mut self, start: Pos, target: Pos) {
+        let (color, piece) = self.get(target).unwrap().unwrap();
+        self.set(target, Some((color, piece.moved(start, target))));
+    }
+
+    pub fn play(&self, color: Color, pos: Pos, actions: &Vec<Action>) -> Self {
+        // TODO: send the appropriate events to update pieces data
+        let mut res = self.clone();
+        res.begin_turn(color);
+        let mut last_pos = pos;
+        // we unwrap because no move can be played out of the board's bound
+        let square = self.get(pos).unwrap();
+        for action in actions {
+            match action {
+                Action::Go(go_pos) => {
+                    res.set(last_pos, None);
+                    res.set(*go_pos, *square);
+                    res.moved(last_pos, *go_pos);
+                    last_pos = *go_pos;
+                }
+                Action::Take(take_pos) => res.set(*take_pos, None),
+                Action::Promotion(piece) => {
+                    let (color, _) = square.unwrap();
+                    res.set(last_pos, Some((color, *piece)));
+                }
+            };
+        }
+        res
+    }
+}
+
+impl Display for Board {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (i, square) in self.squares.iter().enumerate() {
+            if i % self.width == 0 && i != 0 {
+                write!(f, "\n")?;
+            }
+            if let Some((color, piece)) = square {
+                write!(
+                    f,
+                    "{} ",
+                    match color {
+                        Color::White => match piece {
+                            Piece::Pawn {
+                                orientation: _,
+                                status: _,
+                            } => "♙",
+                            Piece::Knight => "♘",
+                            Piece::Bishop => "♗",
+                            Piece::Rook => "♖",
+                            Piece::Queen => "♕",
+                            Piece::King => "♔",
+                        },
+                        Color::Black => match piece {
+                            Piece::Pawn {
+                                orientation: _,
+                                status: _,
+                            } => "♟︎",
+                            Piece::Knight => "♞",
+                            Piece::Bishop => "♝",
+                            Piece::Rook => "♜",
+                            Piece::Queen => "♛",
+                            Piece::King => "♚",
+                        },
+                    }
+                )?;
+            } else {
+                write!(f, "  ")?;
+            }
+        }
+        Ok(())
     }
 }
