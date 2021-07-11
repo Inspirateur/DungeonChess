@@ -54,6 +54,7 @@ fn main() {
     loop {
         let moves = game.board.moves(game.turn, true);
         if moves.len() == 0 {
+            println!("\nNo more valid moves");
             break;
         }
 
@@ -67,9 +68,9 @@ fn main() {
         };
         turn += 1;
         if turn >= 150 {
+            println!("\nGame too long");
             break;
         }
     }
     println!("{}", pgn_moves.iter().join(" "));
-    println!("\nNo more valid moves");
 }

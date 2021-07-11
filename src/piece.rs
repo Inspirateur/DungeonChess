@@ -1,7 +1,6 @@
 use crate::board::Board;
 use crate::pos::{Pos, DIAGS, LINES, LOS};
 use itertools::iproduct;
-use std::fmt::Display;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Color {
