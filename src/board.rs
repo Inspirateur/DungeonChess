@@ -7,8 +7,8 @@ type Square = Option<(Color, Piece)>;
 
 #[derive(Clone)]
 pub struct Board {
-    width: usize,
-    height: usize,
+    pub width: usize,
+    pub height: usize,
     pub squares: Vec<Square>,
 }
 
@@ -59,10 +59,7 @@ impl Board {
     fn is_checked(&self, color: Color) -> bool {
         // if this panic then there's no king of this color on the board lol
         let king_pos = self.king_pos(color).unwrap();
-        let o_color = match color {
-            Color::White => Color::Black,
-            Color::Black => Color::White,
-        };
+        let o_color = color.next();
         for (_, moves) in self.moves(o_color, false) {
             for actions in moves {
                 for action in actions {
