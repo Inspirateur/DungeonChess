@@ -60,17 +60,15 @@ impl Board {
         // if this panic then there's no king of this color on the board lol
         let king_pos = self.king_pos(color).unwrap();
         let o_color = color.next();
-        for (_, moves) in self.moves(o_color, false) {
-            for actions in moves {
-                for action in actions {
-                    if let Action::Go(go_pos) = action {
-                        if go_pos == king_pos {
-                            return true;
-                        }
-                    } else if let Action::Take(take_pos) = action {
-                        if take_pos == king_pos {
-                            return true;
-                        }
+        for (_, actions) in self.moves(o_color, false) {
+            for action in actions {
+                if let Action::Go(go_pos) = action {
+                    if go_pos == king_pos {
+                        return true;
+                    }
+                } else if let Action::Take(take_pos) = action {
+                    if take_pos == king_pos {
+                        return true;
                     }
                 }
             }
@@ -78,9 +76,9 @@ impl Board {
         false
     }
 
-    pub fn moves(&self, color: Color, safe_moves: bool) -> HashMap<Pos, Vec<Vec<Action>>> {
+    pub fn moves(&self, color: Color, safe_moves: bool) -> Vec<(Pos, Vec<Action>)> {
         // generate all moves for color
-        let mut res = HashMap::new();
+        let mut res = Vec::new();
         for (i, square) in self.squares.iter().enumerate() {
             if let Some((piece_color, piece)) = square {
                 if *piece_color == color {
@@ -95,8 +93,8 @@ impl Board {
                             })
                             .collect();
                     }
-                    if p_moves.len() > 0 {
-                        res.insert(pos, p_moves);
+                    for p_move in p_moves {
+                        res.push((pos, p_move));
                     }
                 }
             }

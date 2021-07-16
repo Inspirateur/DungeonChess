@@ -14,7 +14,7 @@ fn main() {
     let mut pgn_moves: Vec<String> = Vec::new();
     let mut turn = 0;
     loop {
-        let move_opt = minmax(&game.board, game.turn);
+        let move_opt = minmax(&game.board, game.turn, 3);
         if move_opt.is_none() {
             println!("\nNo more valid moves");
             break;

@@ -17,7 +17,7 @@ impl Color {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Action {
     Go(Pos),
     Take(Pos),
@@ -58,7 +58,7 @@ fn pawn_moves(
     if let Some(None) = board.get(forward_pos) {
         res.push(vec![Action::Go(forward_pos)]);
         // if we can leap
-        if matches!(status, PawnStatus::CanLeap) {
+        if status == PawnStatus::CanLeap {
             // and the square is available
             if let Some(None) = board.get(leap_pos) {
                 res.push(vec![Action::Go(leap_pos)]);
@@ -91,7 +91,7 @@ fn pawn_moves(
                         } = piece
                         {
                             // if it just leaped forward
-                            if matches!(status, PawnStatus::JustLeaped) {
+                            if *status == PawnStatus::JustLeaped {
                                 res.push(vec![Action::Go(diag_pos), Action::Take(en_passant_pos)])
                             }
                         }
