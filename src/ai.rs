@@ -1,6 +1,8 @@
 use crate::board::Board;
+use crate::pgn::move2pgn;
 use crate::piece::{Action, Color, Piece};
 use crate::pos::Pos;
+use itertools::Itertools;
 use rand::Rng;
 
 fn piece_value(piece: Piece) -> f32 {
@@ -19,7 +21,7 @@ fn piece_value(piece: Piece) -> f32 {
 
 fn axis_value(x: i32, len: usize) -> f32 {
     // score a single axis of a position, gives more value to center
-    0.5 - f32::abs(x as f32 / len as f32 - 0.5)
+    0.5 - f32::abs(x as f32 / (len - 1) as f32 - 0.5)
 }
 
 fn pos_value(board: &Board, pos: Pos) -> f32 {
@@ -138,10 +140,38 @@ pub fn random_move(board: &Board, color: Color) -> Option<(Pos, Vec<Action>)> {
     Some(all_moves[rand::thread_rng().gen_range(0..all_moves.len())].clone())
 }
 
+pub fn auto_play(mut board: Board, starting_player: Color, depth: u32) -> String {
+    let mut pgn_moves: Vec<String> = Vec::new();
+    let mut player = starting_player;
+    let mut turn = 0;
+    loop {
+        let move_opt = minmax(&board, player, depth);
+        if move_opt.is_none() {
+            println!("\nNo more valid moves");
+            break;
+        }
+        let (pos, actions) = move_opt.unwrap();
+        let pgn_move = move2pgn(pos, &actions);
+        pgn_moves.push(pgn_move);
+        board = board.play(player, pos, &actions);
+        player = player.next();
+        turn += 1;
+        if turn >= 100 {
+            println!("\nGame too long");
+            break;
+        }
+    }
+    pgn_moves.iter().join(" ")
+}
+
 mod tests {
     use crate::{
+        ai::auto_play,
         ai::minmax,
+        board::Board,
+        game::invert_color,
         game::standard_board,
+        pgn::move2pgn,
         piece::{Action, Color},
         pos::Pos,
     };
@@ -161,5 +191,14 @@ mod tests {
         board = board.play(Color::Black, pos, &actions);
         println!("{}", board);
         assert!(pos == Pos(4, 3) && actions == vec![Action::Go(Pos(4, 4))]);
+    }
+
+    #[test]
+    fn color_invariant() {
+        let board = standard_board();
+        let pgn_moves1 = auto_play(board, Color::White, 3);
+        let board = invert_color(standard_board());
+        let pgn_moves2 = auto_play(board, Color::Black, 3);
+        assert!(pgn_moves1 == pgn_moves2);
     }
 }

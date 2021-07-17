@@ -45,17 +45,18 @@ pub fn standard_board() -> Board {
     board
 }
 
-// Probably create a structure to coordinate the board, the AI and the player
-pub struct Game {
-    pub turn: Color,
-    pub board: Board,
-}
-
-impl Game {
-    pub fn new() -> Self {
-        Game {
-            turn: Color::White,
-            board: standard_board(),
-        }
-    }
+pub fn invert_color(board: Board) -> Board {
+    let mut inverted = Board::new(board.width, board.height);
+    inverted.squares = board
+        .squares
+        .iter()
+        .map(|square| {
+            if let Some((color, piece)) = square {
+                Some((color.next(), *piece))
+            } else {
+                None
+            }
+        })
+        .collect();
+    inverted
 }
